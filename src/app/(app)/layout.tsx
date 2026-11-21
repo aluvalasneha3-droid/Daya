@@ -26,50 +26,58 @@ import {
   Crown
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/components/auth-provider";
+import { getAuthClient } from "@/lib/auth-client";
 
 const navigationGroups = [
   {
     title: "Daily Support",
     items: [
       { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-      { name: "Daya Chat", href: "/chat", icon: MessageCircle },
-      { name: "Daily Check-in", href: "/checkin", icon: ClipboardList },
-      { name: "Daily Planner", href: "/planner", icon: CalendarDays },
-      { name: "Home Therapies", href: "/home-therapies", icon: Activity },
+      { name: "DAYA Chat", href: "/chat", icon: MessageCircle },
+      { name: "Tomorrow Planner", href: "/planner", icon: CalendarDays },
     ]
   },
   {
-    title: "Intelligence",
+    title: "Care & Reports",
     items: [
-      { name: "Behavioral Insights", href: "/behavioral", icon: BrainCircuit },
       { name: "Medical Records", href: "/medical-records", icon: FolderOpen },
-      { name: "Doctor Reports", href: "/reports", icon: FileText },
+      { name: "Clinical Reports", href: "/reports", icon: FileText },
     ]
   },
   {
-    title: "Continuity of Care",
+    title: "Personalized Care Network",
     items: [
-      { name: "Therapists", href: "/therapists", icon: Stethoscope },
-      { name: "Autism Schools", href: "/schools", icon: GraduationCap },
-      { name: "Shadow Teachers", href: "/shadow-teachers", icon: UserSquare2 },
-    ]
-  },
-  {
-    title: "Parenting",
-    items: [
-      { name: "Communities", href: "/community", icon: Users },
-      { name: "Workshops", href: "/community/workshops", icon: BookOpen },
+      { name: "Recommended Therapists", href: "/therapists", icon: Stethoscope },
+      { name: "Recommended Schools", href: "/schools", icon: GraduationCap },
+      { name: "Recommended Shadow Teachers", href: "/shadow-teachers", icon: UserSquare2 },
     ]
   },
   {
     title: "Account",
     items: [
       { name: "Child Profile", href: "/profile", icon: HeartHandshake },
+      { name: "Settings", href: "/settings", icon: Activity },
     ]
   }
 ];
 
 function SidebarContent({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {
+  const { user } = useAuth();
+  const displayName = user?.user_metadata?.display_name as string | undefined;
+  const email = user?.email ?? "";
+  const initials = (displayName || email || "User")
+    .split(/[\s@]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
+
+  async function signOut() {
+    await getAuthClient()?.auth.signOut();
+    window.location.href = "/login";
+  }
+
   return (
     <>
       <div className="flex h-20 shrink-0 items-center px-8">
@@ -140,15 +148,15 @@ function SidebarContent({ pathname, onNavigate }: { pathname: string; onNavigate
         <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-daya-cream hover:bg-[#F2EDE4] transition-colors border border-transparent hover:border-daya-border">
           <div className="flex items-center gap-3">
             <div className="size-10 rounded-full bg-daya-sage-light flex items-center justify-center text-daya-sage-dark font-bold text-sm">
-              AR
+              {initials || "U"}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-daya-text">Aarav&apos;s Parent</p>
-              <p className="truncate text-xs text-daya-text-secondary">Premium Family</p>
+                <p className="truncate text-sm font-semibold text-daya-text">{displayName || email || "DAYA User"}</p>
+              <p className="truncate text-xs text-daya-text-secondary">{email ? "Private family account" : "Premium Family"}</p>
             </div>
           </div>
           <button 
-            onClick={() => window.location.href = "/"}
+            onClick={signOut}
             className="text-daya-text-light hover:text-daya-error transition-colors p-2 rounded-md hover:bg-white"
             title="Sign Out"
           >

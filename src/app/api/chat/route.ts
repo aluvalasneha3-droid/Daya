@@ -2,7 +2,6 @@ import type { BehavioralInsight, ChatRequestMessage } from "@/types";
 import { createDayaResponseStream } from "@/lib/daya/ai";
 import { buildDayaSystemPrompt } from "@/lib/daya/prompts";
 import {
-  DEMO_USER_ID,
   ensureConversation,
   loadDayaContext,
   persistInsights,
@@ -15,6 +14,7 @@ import { detectIntent } from "@/lib/daya/intent";
 import type { SupportedLanguage } from "@/lib/daya/i18n";
 import { streamText } from "ai";
 import { createGroq } from "@ai-sdk/groq";
+import { getAuthenticatedUser } from "@/lib/auth-server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,6 +33,10 @@ const groq = createGroq({
 });
 
 export async function POST(request: Request) {
+  const authenticatedUser = await getAuthenticatedUser(request);
+  if (!authenticatedUser) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
   const body = (await request.json()) as ChatBody;
   const messages = sanitizeMessages(body.messages ?? []);
   const latestUserMessage = [...messages]
@@ -43,7 +47,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "A user message is required." }, { status: 400 });
   }
 
-  const userId = body.userId ?? DEMO_USER_ID;
+  const userId = authenticatedUser.id;
   const safety = assessSafety(latestUserMessage.content);
   const context = await loadDayaContext({
     userId,
@@ -108,10 +112,10 @@ export async function POST(request: Request) {
   if (process.env.GROQ_API_KEY && (!safety.blocked || safety.category === "none")) {
     try {
       const result = streamText({
-        model: groq("gemma2-9b-it"), // Google's Gemma model on Groq (fresh token bucket)
+        model: groq(process.env.DAYA_GROQ_MODEL ?? "openai/gpt-oss-20b"),
         maxRetries: 0, // Disable waiting 60s for rate limits to clear
         system: system,
-        messages: messages as any[],
+        messages: messages.map(({ role, content }) => ({ role, content })),
         temperature: 0.7, // Add a bit of warmth and variation
         async onFinish({ text }) {
           if (text.trim()) {

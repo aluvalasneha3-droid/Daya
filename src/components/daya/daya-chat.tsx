@@ -51,6 +51,7 @@ import type { FoodPlan } from "@/lib/daya/food-planner";
 import type { BehavioralWeights } from "@/lib/daya/behavioral-weights";
 import type { RoutineChange } from "@/lib/daya/routine-detector";
 import type { SupportedLanguage } from "@/lib/daya/i18n";
+import { getAccessToken } from "@/lib/auth-client";
 import {
   LANGUAGE_META,
   UI_TRANSLATIONS,
@@ -114,7 +115,7 @@ type CheckInForm = {
 type ActiveTab = "chat" | "plan" | "report";
 
 const suggestions = [
-  "Aarav had a hard evening after a loud birthday party.",
+  "My child had a hard evening after a loud birthday party.",
   "Can you help me plan tomorrow based on today's check-in?",
   "We had a good communication day today.",
   "I'm feeling exhausted — what should tomorrow look like?",
@@ -165,6 +166,7 @@ export function DayaChat() {
   const [contextLoading, setContextLoading] = useState(true);
   const [showCheckIn, setShowCheckIn] = useState(false);
   const [savingCheckIn, setSavingCheckIn] = useState(false);
+  const [checkInError, setCheckInError] = useState("");
   const [activeTab, setActiveTab] = useState<ActiveTab>("chat");
   const [behavioralWeights, setBehavioralWeights] = useState<BehavioralWeights | null>(null);
   const [routineChanges, setRoutineChanges] = useState<RoutineChange[]>([]);
@@ -204,13 +206,17 @@ export function DayaChat() {
     setIsListening(false);
   }
 
-  const childName = context?.child?.name ?? "Aarav";
+  const childName = context?.child?.name ?? "your child";
   const topInsight = context?.insights?.[0];
   const quickChips = getQuickChips(t, childName, language);
 
 
   const refreshContext = useCallback(async () => {
-    const response = await fetch("/api/context", { cache: "no-store" });
+    const accessToken = await getAccessToken();
+    const response = await fetch("/api/context", {
+      cache: "no-store",
+      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+    });
     if (!response.ok) return;
     setContext((await response.json()) as DayaContextResponse);
   }, []);
@@ -218,7 +224,13 @@ export function DayaChat() {
   useEffect(() => {
     let cancelled = false;
 
-    fetch("/api/context", { cache: "no-store" })
+    getAccessToken()
+      .then((accessToken) =>
+        fetch("/api/context", {
+          cache: "no-store",
+          headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+        })
+      )
       .then((response) => (response.ok ? response.json() : null))
       .then((data) => {
         if (!cancelled && data) setContext(data as DayaContextResponse);
@@ -246,18 +258,24 @@ export function DayaChat() {
 
   async function handleCheckInSubmit(form: CheckInForm) {
     setSavingCheckIn(true);
+    setCheckInError("");
     try {
+      const accessToken = await getAccessToken();
       const response = await fetch("/api/check-ins", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
         body: JSON.stringify({
           ...form,
+          date: format(new Date(), "yyyy-MM-dd"),
           sleep_hours: Number(form.sleep_hours) || undefined,
         }),
       });
 
-      if (!response.ok) throw new Error("Check-in failed");
-      const result = (await response.json()) as CheckInResponse;
+      const result = (await response.json()) as CheckInResponse & { error?: string };
+      if (!response.ok) throw new Error(result.error ?? "Your check-in could not be saved.");
 
       if (result.behavioralWeights) setBehavioralWeights(result.behavioralWeights);
       if (result.routineChanges) setRoutineChanges(result.routineChanges);
@@ -266,6 +284,8 @@ export function DayaChat() {
       await refreshContext();
       setShowCheckIn(false);
       handleSend(result.summaryPrompt);
+    } catch (error) {
+      setCheckInError(error instanceof Error ? error.message : "Your check-in could not be saved.");
     } finally {
       setSavingCheckIn(false);
     }
@@ -458,6 +478,7 @@ export function DayaChat() {
           <CheckInOverlay
             childName={childName}
             saving={savingCheckIn}
+            error={checkInError}
             onClose={() => setShowCheckIn(false)}
             onSubmit={handleCheckInSubmit}
           />
@@ -474,7 +495,13 @@ function DailyPlanView({ childName }: { childName: string }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/daily-plan", { cache: "no-store" })
+    getAccessToken()
+      .then((token) =>
+        fetch("/api/daily-plan", {
+          cache: "no-store",
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        })
+      )
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (data) setPlan(data as DailyPlanResponse);
@@ -669,7 +696,13 @@ function ReportView({ childName }: { childName: string }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/report", { cache: "no-store" })
+    getAccessToken()
+      .then((token) =>
+        fetch("/api/report", {
+          cache: "no-store",
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        })
+      )
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (data) setReport(data as TherapistReport);
@@ -678,7 +711,11 @@ function ReportView({ childName }: { childName: string }) {
   }, []);
 
   async function handleDownload() {
-    const response = await fetch("/api/report?format=text", { cache: "no-store" });
+    const token = await getAccessToken();
+    const response = await fetch("/api/report?format=text", {
+      cache: "no-store",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
     if (!response.ok) return;
     const text = await response.text();
     const blob = new Blob([text], { type: "text/plain" });
@@ -1188,11 +1225,13 @@ function SkeletonLines() {
 function CheckInOverlay({
   childName,
   saving,
+  error,
   onClose,
   onSubmit,
 }: {
   childName: string;
   saving: boolean;
+  error: string;
   onClose: () => void;
   onSubmit: (form: CheckInForm) => void;
 }) {
@@ -1462,6 +1501,11 @@ function CheckInOverlay({
         </div>
 
         <div className="border-t border-slate-200 p-4">
+          {error && (
+            <p role="alert" className="mb-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+              {error}
+            </p>
+          )}
           <Button
             disabled={saving}
             onClick={() => onSubmit(form)}

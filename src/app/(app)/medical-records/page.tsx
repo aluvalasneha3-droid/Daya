@@ -1,117 +1,170 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Upload, FileText, AlertCircle, FileType, CheckCircle2 } from "lucide-react";
+import { AlertCircle, FileText, FileType, Trash2, Upload } from "lucide-react";
+import { getAccessToken } from "@/lib/auth-client";
+
+type ChildDocument = {
+  id: string;
+  file_name: string;
+  mime_type: string;
+  file_size: number;
+  category: string;
+  created_at: string;
+  url: string;
+};
+
+function formatSize(bytes: number) {
+  return bytes < 1024 * 1024
+    ? `${Math.max(1, Math.round(bytes / 1024))} KB`
+    : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 export default function MedicalRecordsPage() {
-  const [isUploading, setIsUploading] = useState(false);
-  const [isSuccess, setIsSuccess] = useState(false);
+  const [documents, setDocuments] = useState<ChildDocument[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
 
-  const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      setIsUploading(true);
-      setTimeout(() => {
-        setIsUploading(false);
-        setIsSuccess(true);
-        setTimeout(() => setIsSuccess(false), 3000);
-      }, 2000);
+  const refreshDocuments = useCallback(async () => {
+    const token = await getAccessToken();
+    const response = await fetch("/api/profile/documents", {
+      cache: "no-store",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error ?? "Could not load reports.");
+    setDocuments(data.documents ?? []);
+  }, []);
+
+  useEffect(() => {
+    getAccessToken()
+      .then(async (token) => {
+        const response = await fetch("/api/profile/documents", {
+          cache: "no-store",
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error ?? "Could not load reports.");
+        setDocuments(data.documents ?? []);
+      })
+      .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Could not load reports."))
+      .finally(() => setLoading(false));
+  }, []);
+
+  async function uploadFile(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    setUploading(true);
+    setError("");
+    try {
+      const token = await getAccessToken();
+      const formData = new FormData();
+      formData.set("file", file);
+      const response = await fetch("/api/profile/documents", {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData,
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Could not upload report.");
+      await refreshDocuments();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not upload report.");
+    } finally {
+      setUploading(false);
     }
-  };
+  }
+
+  async function deleteDocument(document: ChildDocument) {
+    if (!window.confirm(`Delete "${document.file_name}" from your private reports?`)) return;
+    setError("");
+    try {
+      const token = await getAccessToken();
+      const response = await fetch("/api/profile/documents", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ id: document.id }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Could not delete report.");
+      setDocuments((current) => current.filter((item) => item.id !== document.id));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not delete report.");
+    }
+  }
 
   return (
     <div className="flex-1 h-full overflow-y-auto p-6 md:p-10">
       <div className="max-w-3xl mx-auto space-y-8">
-        
-        {/* Header */}
         <div>
           <h1 className="text-3xl font-bold text-daya-text mb-2">Medical Reports</h1>
           <p className="text-daya-text-secondary leading-relaxed">
-            Upload and organize Aarav's reports in one place. These documents serve as a private reference to help DAYA understand his needs better, and keep your records perfectly organized.
+            Upload and privately organize reports for your family. Files are stored in your Supabase account and only accessible through your signed-in account.
           </p>
         </div>
 
-        {/* Info Banner */}
         <div className="bg-daya-sky/10 border border-daya-sky/30 rounded-2xl p-4 flex gap-3 text-daya-text">
           <AlertCircle className="size-5 text-daya-sky shrink-0 mt-0.5" />
           <p className="text-sm leading-relaxed">
-            <strong>Important:</strong> DAYA does not use these files to diagnose or prescribe medical treatment. They are safely stored to assist you in organizing information and providing contextual background for your daily support tools.
+            <strong>Important:</strong> DAYA does not diagnose or prescribe treatment. Reports are for family organization and context. Only PDF, JPEG, or PNG files up to 10 MB are accepted.
           </p>
         </div>
 
-        {/* Upload Area */}
-        <div className="bg-white rounded-3xl shadow-sm border border-daya-border p-8 md:p-12 text-center relative overflow-hidden">
-          {isSuccess ? (
-            <motion.div 
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              className="flex flex-col items-center justify-center py-6"
-            >
-              <div className="size-16 bg-daya-success/20 text-daya-sage-dark rounded-full flex items-center justify-center mb-4">
-                <CheckCircle2 className="size-8" />
-              </div>
-              <h3 className="text-xl font-bold text-daya-text mb-1">Upload Complete</h3>
-              <p className="text-daya-text-secondary text-sm">Your file has been safely stored in Aarav's profile.</p>
-            </motion.div>
-          ) : (
-            <>
-              <div className="size-16 bg-daya-cream rounded-full flex items-center justify-center mx-auto mb-6">
-                <Upload className="size-8 text-daya-sage" />
-              </div>
-              
-              <h3 className="text-xl font-bold text-daya-text mb-2">Upload a New Report</h3>
-              <p className="text-sm text-daya-text-secondary mb-8 max-w-md mx-auto">
-                Drag and drop your file here, or click to browse. Supported formats: PDF, JPEG, PNG.
-              </p>
+        {error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</p>}
 
-              <div className="relative">
-                <input 
-                  type="file" 
-                  accept=".pdf,image/jpeg,image/png"
-                  onChange={handleUpload}
-                  disabled={isUploading}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
-                />
-                <button 
-                  disabled={isUploading}
-                  className="bg-daya-sage text-white px-8 py-3.5 rounded-xl font-medium hover:bg-daya-sage-dark transition-colors disabled:opacity-70 flex items-center gap-2 mx-auto"
-                >
-                  {isUploading ? (
-                    <>Uploading...</>
-                  ) : (
-                    <>Browse Files</>
-                  )}
-                </button>
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Past Reports List */}
-        <div>
-          <h2 className="text-lg font-bold text-daya-text mb-4">Past Uploads</h2>
-          <div className="space-y-3">
-            {[
-              { name: "Developmental_Assessment_Jan2026.pdf", date: "Jan 12, 2026", size: "2.4 MB" },
-              { name: "Speech_Therapy_Summary_Nov.pdf", date: "Nov 30, 2025", size: "1.1 MB" },
-              { name: "Sensory_Profile_Questionnaire.png", date: "Sep 15, 2025", size: "4.5 MB" }
-            ].map((file) => (
-              <div key={file.name} className="flex items-center gap-4 bg-white p-4 rounded-xl border border-daya-border hover:border-daya-sage/30 transition-colors">
-                <div className="size-10 rounded-lg bg-daya-cream flex items-center justify-center text-daya-sage shrink-0">
-                  <FileType className="size-5" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-daya-text truncate">{file.name}</p>
-                  <p className="text-xs text-daya-text-light">{file.date} • {file.size}</p>
-                </div>
-                <button className="text-daya-sage hover:text-daya-sage-dark text-sm font-medium transition-colors p-2">
-                  View
-                </button>
-              </div>
-            ))}
+        <div className="bg-white rounded-3xl shadow-sm border border-daya-border p-8 md:p-12 text-center">
+          <div className="size-16 bg-daya-cream rounded-full flex items-center justify-center mx-auto mb-6">
+            <Upload className="size-8 text-daya-sage" />
           </div>
+          <h2 className="text-xl font-bold text-daya-text mb-2">Upload a previous report</h2>
+          <p className="text-sm text-daya-text-secondary mb-8 max-w-md mx-auto">
+            Choose a developmental, therapy, school, or other care document to keep it with this child&apos;s private profile.
+          </p>
+          <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-daya-sage px-8 py-3.5 font-medium text-white transition-colors hover:bg-daya-sage-dark has-[:disabled]:opacity-70">
+            <Upload className="size-4" />
+            {uploading ? "Uploading..." : "Browse Files"}
+            <input type="file" accept=".pdf,image/jpeg,image/png" onChange={uploadFile} disabled={uploading} className="sr-only" />
+          </label>
         </div>
 
+        <section>
+          <h2 className="text-lg font-bold text-daya-text mb-4">Past Uploads</h2>
+          {loading ? (
+            <p className="rounded-xl bg-white p-5 text-sm text-daya-text-secondary">Loading your saved reports...</p>
+          ) : documents.length === 0 ? (
+            <p className="rounded-xl bg-white p-5 text-sm text-daya-text-secondary">No reports uploaded to this account yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {documents.map((document) => (
+                <motion.div key={document.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                  className="flex items-center gap-4 bg-white p-4 rounded-xl border border-daya-border">
+                  <div className="size-10 rounded-lg bg-daya-cream flex items-center justify-center text-daya-sage shrink-0">
+                    {document.mime_type === "application/pdf" ? <FileText className="size-5" /> : <FileType className="size-5" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-daya-text truncate">{document.file_name}</p>
+                    <p className="text-xs text-daya-text-light">
+                      {new Date(document.created_at).toLocaleDateString()} · {formatSize(document.file_size)}
+                    </p>
+                  </div>
+                  <a href={document.url} target="_blank" rel="noopener noreferrer"
+                    className="text-daya-sage-dark hover:text-daya-sage text-sm font-medium p-2">View</a>
+                  <button type="button" onClick={() => void deleteDocument(document)} aria-label={`Delete ${document.file_name}`}
+                    className="rounded-lg p-2 text-daya-text-light hover:bg-red-50 hover:text-red-600">
+                    <Trash2 className="size-4" />
+                  </button>
+                </motion.div>
+              ))}
+            </div>
+          )}
+        </section>
       </div>
     </div>
   );

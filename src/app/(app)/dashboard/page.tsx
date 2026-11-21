@@ -1,51 +1,161 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { 
-  Brain, 
-  Calendar, 
-  TrendingUp, 
+import {
   ArrowRight,
-  ClipboardList,
-  Sparkles,
-  HeartPulse,
-  Clock,
-  MessageCircle,
-  Activity,
-  Moon,
-  Sun,
+  BarChart3,
+  Brain,
+  Calendar,
+  Check,
   ChevronRight,
-  Zap,
-  Shield,
-  BarChart3
+  ClipboardList,
+  Clock,
+  HeartPulse,
+  MessageCircle,
+  Moon,
+  Sparkles,
+  Sun,
+  TrendingUp,
 } from "lucide-react";
 import Link from "next/link";
 import { motion, type Variants } from "framer-motion";
+import { getAccessToken } from "@/lib/auth-client";
+import type { BehavioralInsight, ChildProfile, DailyCheckIn, MoodValue } from "@/types";
 
 const fadeUp: Variants = {
   hidden: { opacity: 0, y: 20 },
   visible: (i: number) => ({
     opacity: 1,
     y: 0,
-    transition: { delay: i * 0.08, duration: 0.45, ease: "easeOut" as const },
+    transition: { delay: i * 0.06, duration: 0.4, ease: "easeOut" as const },
   }),
 };
 
+const periods = [
+  { id: "morning", label: "Morning", icon: Sun },
+  { id: "afternoon", label: "Afternoon", icon: Clock },
+  { id: "evening", label: "Evening", icon: Sparkles },
+  { id: "night", label: "Night", icon: Moon },
+] as const;
+
+type Period = (typeof periods)[number]["id"];
+type PlanTask = {
+  id: string;
+  title: string;
+  description: string;
+  time: string;
+  completed: boolean;
+};
+type PlanSection = { period: Period; items: PlanTask[] };
+type DashboardContext = {
+  child?: ChildProfile;
+  recentCheckIns: DailyCheckIn[];
+  insights: BehavioralInsight[];
+  persistence: "supabase" | "demo";
+};
+type ActivityItem = {
+  id: string;
+  title: string;
+  detail: string;
+  date: string;
+  icon: typeof ClipboardList;
+  color: string;
+};
+
+function localDate(date = new Date()) {
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
+function moodLabel(mood?: MoodValue) {
+  if (!mood) return "Not logged";
+  return {
+    great: "Great",
+    good: "Good",
+    okay: "Okay",
+    difficult: "Difficult",
+    very_difficult: "Very difficult",
+  }[mood];
+}
+
+function moodValue(mood: MoodValue) {
+  return {
+    very_difficult: 1,
+    difficult: 2,
+    okay: 3,
+    good: 4,
+    great: 5,
+  }[mood];
+}
+
+function readableDate(date: string) {
+  return new Date(`${date}T00:00:00`).toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+  });
+}
+
+function emptyPlan(): PlanSection[] {
+  return periods.map(({ id }) => ({ period: id, items: [] }));
+}
+
 export default function DashboardPage() {
+  const [today, setToday] = useState("");
+  const [greeting, setGreeting] = useState("Hello");
+  const [context, setContext] = useState<DashboardContext | null>(null);
+  const [sections, setSections] = useState<PlanSection[]>(emptyPlan);
   const [loading, setLoading] = useState(true);
-  const [greeting, setGreeting] = useState("Good morning");
+  const [savingTaskId, setSavingTaskId] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
-    const hour = new Date().getHours();
-    if (hour < 12) setGreeting("Good morning");
-    else if (hour < 17) setGreeting("Good afternoon");
-    else setGreeting("Good evening");
-    
-    const timer = setTimeout(() => setLoading(false), 600);
-    return () => clearTimeout(timer);
+    queueMicrotask(() => {
+      const now = new Date();
+      const hour = now.getHours();
+      setToday(localDate(now));
+      setGreeting(hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening");
+    });
   }, []);
 
-  if (loading) {
+  useEffect(() => {
+    if (!today) return;
+    const controller = new AbortController();
+
+    void (async () => {
+      try {
+        const token = await getAccessToken();
+        const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+        const [contextResponse, planResponse] = await Promise.all([
+          fetch("/api/context", { cache: "no-store", headers, signal: controller.signal }),
+          fetch(`/api/planner?date=${encodeURIComponent(today)}`, {
+            cache: "no-store",
+            headers,
+            signal: controller.signal,
+          }),
+        ]);
+        const contextResult = (await contextResponse.json()) as DashboardContext & { error?: string };
+        const planResult = (await planResponse.json()) as { sections?: PlanSection[]; error?: string };
+        if (!contextResponse.ok) throw new Error(contextResult.error ?? "Could not load your family dashboard.");
+        if (!planResponse.ok) throw new Error(planResult.error ?? "Could not load today's saved plan.");
+        if (!controller.signal.aborted) {
+          setContext(contextResult);
+          setSections(planResult.sections ?? emptyPlan());
+        }
+      } catch (caught) {
+        if (!controller.signal.aborted) {
+          setError(caught instanceof Error ? caught.message : "Could not load your family dashboard.");
+        }
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    })();
+
+    return () => controller.abort();
+  }, [today, reloadKey]);
+
+  if (loading || !today) {
     return (
       <div className="flex h-full items-center justify-center">
         <div className="flex flex-col items-center gap-4">
@@ -55,308 +165,488 @@ export default function DashboardPage() {
               <Brain className="size-5 text-daya-sage-dark animate-pulse" />
             </div>
           </div>
-          <p className="text-sm text-daya-text-secondary font-medium">Gathering DAYA insights...</p>
+          <p className="text-sm font-medium text-daya-text-secondary">Loading your saved family data…</p>
         </div>
       </div>
     );
   }
 
+  const childName = context?.child?.name ?? "your child";
+  const checkIns = context?.recentCheckIns ?? [];
+  const insights = context?.insights ?? [];
+  const todayCheckIn = checkIns.find((item) => item.date === today);
+  const latestCheckIn = checkIns.at(-1);
+  const activeCheckIn = todayCheckIn ?? latestCheckIn;
+  const completedTasks = sections.reduce(
+    (count, section) => count + section.items.filter((task) => task.completed).length,
+    0
+  );
+  const totalTasks = sections.reduce((count, section) => count + section.items.length, 0);
+
+  const lastSevenDates = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(`${today}T00:00:00`);
+    date.setDate(date.getDate() - (6 - index));
+    return localDate(date);
+  });
+  const checkInsByDate = new Map(checkIns.map((item) => [item.date, item]));
+
+  const activity: ActivityItem[] = [
+    ...checkIns.map((item) => ({
+      id: `checkin-${item.id}`,
+      title: "Daily check-in",
+      detail: `${moodLabel(item.mood)} mood${item.sleep_hours != null ? ` · ${item.sleep_hours} hours of sleep` : ""}${item.notes ? ` · ${item.notes}` : ""}`,
+      date: item.date,
+      icon: ClipboardList,
+      color: "text-daya-sage-dark",
+    })),
+    ...insights.map((item) => ({
+      id: `insight-${item.id}`,
+      title: item.title,
+      detail: item.description,
+      date: item.created_at.slice(0, 10),
+      icon: Brain,
+      color: "text-[#8B75A1]",
+    })),
+  ]
+    .sort((left, right) => right.date.localeCompare(left.date))
+    .slice(0, 5);
+
+  async function toggleTask(period: Period, task: PlanTask) {
+    const previousSections = sections;
+    const nextSections = sections.map((section) =>
+      section.period === period
+        ? {
+            ...section,
+            items: section.items.map((item) =>
+              item.id === task.id ? { ...item, completed: !item.completed } : item
+            ),
+          }
+        : section
+    );
+
+    setSections(nextSections);
+    setSavingTaskId(task.id);
+    setError("");
+
+    try {
+      const token = await getAccessToken();
+      const response = await fetch("/api/planner", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ date: today, sections: nextSections }),
+      });
+      const result = (await response.json()) as { sections?: PlanSection[]; error?: string };
+      if (!response.ok) throw new Error(result.error ?? "Could not save this schedule update.");
+      setSections(result.sections ?? nextSections);
+    } catch (caught) {
+      setSections(previousSections);
+      setError(caught instanceof Error ? caught.message : "Could not save this schedule update.");
+    } finally {
+      setSavingTaskId(null);
+    }
+  }
+
   return (
     <div className="h-full overflow-y-auto p-6 md:p-10">
       <div className="mx-auto max-w-6xl space-y-8">
-        {/* Welcome Section */}
-        <motion.div 
-          initial="hidden" animate="visible" variants={fadeUp} custom={0}
-          className="flex flex-col gap-4 md:flex-row md:items-end justify-between"
+        <motion.div
+          initial="hidden"
+          animate="visible"
+          variants={fadeUp}
+          custom={0}
+          className="flex flex-col justify-between gap-4 md:flex-row md:items-end"
         >
           <div>
-            <p className="text-sm font-medium text-daya-sage-dark mb-1 flex items-center gap-1.5">
+            <p className="mb-1 flex items-center gap-1.5 text-sm font-medium text-daya-sage-dark">
               <Sun className="size-4" />
-              {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })}
+              {new Date(`${today}T00:00:00`).toLocaleDateString("en-IN", {
+                weekday: "long",
+                day: "numeric",
+                month: "long",
+              })}
             </p>
-            <h1 className="text-3xl font-bold text-daya-text mb-2">{greeting}, Ananya.</h1>
-            <p className="text-daya-text-secondary">Here&apos;s what DAYA has noticed about Aarav&apos;s patterns today.</p>
+            <h1 className="mb-2 text-3xl font-bold text-daya-text">{greeting}.</h1>
+            <p className="text-daya-text-secondary">
+              {activeCheckIn
+                ? `Your dashboard is based on ${childName}'s saved check-ins and your schedule.`
+                : `Your family dashboard is ready. Add a check-in or plan activities to see your own information here.`}
+            </p>
           </div>
-          <Link 
-            href="/chat"
-            className="group flex items-center justify-center gap-2 bg-daya-sage hover:bg-daya-sage-dark text-white px-6 py-3 rounded-2xl font-medium transition-all shadow-sm hover:shadow-lg hover:shadow-daya-sage/20"
-          >
-            <Sparkles className="size-4" />
-            Talk to DAYA
-            <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
-          </Link>
+          <div className="flex flex-wrap gap-3">
+            <Link
+              href="/chat"
+              className="group flex items-center justify-center gap-2 rounded-2xl bg-daya-sage px-6 py-3 font-medium text-white shadow-sm transition-all hover:bg-daya-sage-dark hover:shadow-lg hover:shadow-daya-sage/20"
+            >
+              <MessageCircle className="size-4" />
+              Log a check-in
+              <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
+            </Link>
+            <Link
+              href="/planner"
+              className="flex items-center justify-center gap-2 rounded-2xl border border-daya-border bg-white px-5 py-3 font-medium text-daya-text transition-colors hover:bg-daya-cream"
+            >
+              <Calendar className="size-4" />
+              Plan your day
+            </Link>
+          </div>
         </motion.div>
 
-        {/* DAYA Score Banner */}
-        <motion.div 
-          initial="hidden" animate="visible" variants={fadeUp} custom={1}
-          className="rounded-3xl bg-gradient-to-r from-daya-sage via-[#8DB585] to-[#7A9E70] p-6 md:p-8 text-white shadow-lg shadow-daya-sage/20 relative overflow-hidden"
-        >
-          <div className="absolute inset-0 pointer-events-none">
-            <div className="absolute -top-20 -right-20 w-[300px] h-[300px] rounded-full bg-white/10 blur-3xl" />
-            <div className="absolute -bottom-20 -left-20 w-[200px] h-[200px] rounded-full bg-white/10 blur-3xl" />
+        {error && (
+          <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            <span>{error}</span>
+            <button
+              type="button"
+              onClick={() => {
+                setError("");
+                setLoading(true);
+                setReloadKey((key) => key + 1);
+              }}
+              className="font-semibold underline"
+            >
+              Try again
+            </button>
           </div>
-          <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-4">
+        )}
+
+        <motion.section
+          initial="hidden"
+          animate="visible"
+          variants={fadeUp}
+          custom={1}
+          className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-daya-sage via-[#8DB585] to-[#7A9E70] p-6 text-white shadow-lg shadow-daya-sage/20 md:p-8"
+        >
+          <div className="pointer-events-none absolute -right-20 -top-20 size-[300px] rounded-full bg-white/10 blur-3xl" />
+          <div className="relative flex flex-col justify-between gap-6 md:flex-row md:items-center">
             <div>
-              <div className="flex items-center gap-2 mb-2">
-                <Shield className="size-5 text-white/80" />
-                <span className="text-sm font-semibold text-white/80 uppercase tracking-wide">DAYA Behavioral Score</span>
+              <div className="mb-2 flex items-center gap-2">
+                <HeartPulse className="size-5 text-white/80" />
+                <span className="text-sm font-semibold uppercase tracking-wide text-white/80">
+                  {todayCheckIn ? "Today's check-in" : "Your family's day"}
+                </span>
               </div>
-              <div className="flex items-baseline gap-3">
-                <span className="text-5xl font-extrabold tracking-tight">72</span>
-                <span className="text-lg font-medium text-white/70">/100</span>
-              </div>
-              <p className="mt-2 text-sm text-white/80 max-w-md">
-                Aarav&apos;s overall stability has improved 8 points this week. Sleep consistency and reduced sensory overload are the biggest contributors.
+              <p className="text-4xl font-extrabold tracking-tight">
+                {todayCheckIn ? moodLabel(todayCheckIn.mood) : "Your own data"}
+              </p>
+              <p className="mt-2 max-w-lg text-sm text-white/85">
+                {todayCheckIn
+                  ? `This is based on the check-in you logged today${todayCheckIn.notes ? `: “${todayCheckIn.notes}”` : "."}`
+                  : "DAYA will show what you add here—no sample scores or made-up observations."}
               </p>
             </div>
-            <div className="flex gap-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               {[
-                { label: "Sleep", value: "7.2h", trend: "↑", good: true },
-                { label: "Mood", value: "Okay", trend: "→", good: false },
-                { label: "Sensory", value: "Low", trend: "↓", good: true },
+                {
+                  label: "Sleep",
+                  value: todayCheckIn?.sleep_hours != null ? `${todayCheckIn.sleep_hours}h` : "Not logged",
+                },
+                {
+                  label: "Sensory load",
+                  value: todayCheckIn?.sensory_load != null ? `${todayCheckIn.sensory_load} / 5` : "Not logged",
+                },
+                {
+                  label: "Meltdowns",
+                  value: todayCheckIn ? String(todayCheckIn.meltdowns) : "Not logged",
+                },
               ].map((item) => (
-                <div key={item.label} className="rounded-2xl bg-white/15 backdrop-blur-sm px-4 py-3 min-w-[80px] text-center">
-                  <p className="text-xs text-white/70 font-medium">{item.label}</p>
-                  <p className="text-lg font-bold mt-0.5">{item.value}</p>
-                  <p className={cn("text-xs font-bold mt-0.5", item.good ? "text-green-200" : "text-amber-200")}>
-                    {item.trend} {item.good ? "Better" : "Stable"}
-                  </p>
+                <div key={item.label} className="min-w-[92px] rounded-2xl bg-white/15 px-4 py-3 text-center backdrop-blur-sm">
+                  <p className="text-xs font-medium text-white/75">{item.label}</p>
+                  <p className="mt-1 text-lg font-bold">{item.value}</p>
                 </div>
               ))}
             </div>
           </div>
-        </motion.div>
+        </motion.section>
 
-        {/* Stats Grid */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {[
-            { label: "Data Depth", value: "32 Days", sub: "Continuous tracking", icon: ClipboardList, color: "bg-daya-sky/20 text-daya-sky", border: "border-daya-sky/30" },
-            { label: "Detected Patterns", value: "6 Active", sub: "2 new this week", icon: Brain, color: "bg-daya-lavender/30 text-[#8B75A1]", border: "border-daya-lavender/50" },
-            { label: "Stability Trajectory", value: "Improving", sub: "+8pts from last week", icon: TrendingUp, color: "bg-daya-success/30 text-daya-sage-dark", border: "border-daya-success/50" },
-            { label: "Parent Stress Level", value: "Moderate", sub: "Down from High", icon: HeartPulse, color: "bg-daya-terracotta/20 text-daya-terracotta", border: "border-daya-terracotta/30" },
-          ].map((stat, i) => (
+            {
+              label: "Check-in days",
+              value: String(checkIns.length),
+              sub: checkIns.length ? "Your recorded days" : "Nothing recorded yet",
+              icon: ClipboardList,
+              color: "bg-daya-sky/20 text-daya-sky",
+              border: "border-daya-sky/30",
+            },
+            {
+              label: "Observations",
+              value: String(insights.length),
+              sub: insights.length ? "Generated from your data" : "More check-ins build your history",
+              icon: Brain,
+              color: "bg-daya-lavender/30 text-[#8B75A1]",
+              border: "border-daya-lavender/50",
+            },
+            {
+              label: "Today's activities",
+              value: String(totalTasks),
+              sub: totalTasks ? `${completedTasks} marked complete` : "Add your own activities",
+              icon: Calendar,
+              color: "bg-daya-success/30 text-daya-sage-dark",
+              border: "border-daya-success/50",
+            },
+            {
+              label: "Parent stress",
+              value: activeCheckIn?.parent_stress != null ? `${activeCheckIn.parent_stress} / 5` : "Not logged",
+              sub: activeCheckIn ? `From ${readableDate(activeCheckIn.date)} check-in` : "Optional check-in detail",
+              icon: HeartPulse,
+              color: "bg-daya-terracotta/20 text-daya-terracotta",
+              border: "border-daya-terracotta/30",
+            },
+          ].map((stat, index) => (
             <motion.div
               key={stat.label}
               initial="hidden"
               animate="visible"
               variants={fadeUp}
-              custom={i + 2}
-              className="rounded-3xl border border-daya-border bg-white p-6 shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-0.5"
+              custom={index + 2}
+              className="rounded-3xl border border-daya-border bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md"
             >
               <div className={cn("mb-4 flex size-12 items-center justify-center rounded-2xl border", stat.color, stat.border)}>
                 <stat.icon className="size-6" />
               </div>
-              <p className="text-sm font-medium text-daya-text-secondary mb-1">{stat.label}</p>
+              <p className="mb-1 text-sm font-medium text-daya-text-secondary">{stat.label}</p>
               <p className="text-2xl font-bold text-daya-text">{stat.value}</p>
-              <p className="text-xs text-daya-text-light mt-1">{stat.sub}</p>
+              <p className="mt-1 text-xs text-daya-text-light">{stat.sub}</p>
             </motion.div>
           ))}
         </div>
 
-        {/* Main Content Sections */}
         <div className="grid gap-6 lg:grid-cols-2">
-          {/* Recent Insights */}
-          <motion.section 
-            initial="hidden" animate="visible" variants={fadeUp} custom={6}
+          <motion.section
+            initial="hidden"
+            animate="visible"
+            variants={fadeUp}
+            custom={6}
             className="rounded-3xl border border-daya-border bg-white p-8 shadow-sm"
           >
             <div className="mb-6 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-daya-text">DAYA Observations</h2>
+              <h2 className="text-xl font-bold text-daya-text">Your observations</h2>
               <Brain className="size-6 text-daya-sage" />
             </div>
-            <div className="space-y-4">
-              <div className="rounded-2xl bg-daya-cream p-5 border border-daya-border hover:border-daya-sage/30 transition-colors">
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="size-2 rounded-full bg-daya-sage-dark" />
-                  <p className="text-sm font-bold text-daya-text">Sleep-Mood Correlation</p>
-                  <span className="ml-auto text-[10px] font-bold uppercase tracking-wider text-daya-sage-dark bg-daya-sage-light px-2 py-0.5 rounded-full">High Confidence</span>
-                </div>
-                <p className="text-sm text-daya-text-secondary leading-relaxed">
-                  Aarav shows significantly higher emotional regulation on days following at least 8.5 hours of uninterrupted sleep.
-                </p>
+            {insights.length ? (
+              <div className="space-y-3">
+                {insights.slice(0, 3).map((insight) => (
+                  <article key={insight.id} className="rounded-2xl border border-daya-border bg-daya-cream p-5">
+                    <div className="mb-2 flex items-center gap-2">
+                      <span className="size-2 rounded-full bg-daya-sage-dark" />
+                      <h3 className="text-sm font-bold text-daya-text">{insight.title}</h3>
+                    </div>
+                    <p className="text-sm leading-relaxed text-daya-text-secondary">{insight.description}</p>
+                    <p className="mt-2 text-xs text-daya-text-light">
+                      {insight.data_points} data point{insight.data_points === 1 ? "" : "s"} · {Math.round(insight.confidence * 100)}% confidence
+                    </p>
+                  </article>
+                ))}
               </div>
-              <div className="rounded-2xl bg-[#FDF8F6] p-5 border border-[#F4E3DD] hover:border-daya-terracotta/30 transition-colors">
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="size-2 rounded-full bg-daya-terracotta" />
-                  <p className="text-sm font-bold text-[#8A5A44]">Sensory Threshold Warning</p>
-                  <span className="ml-auto text-[10px] font-bold uppercase tracking-wider text-daya-terracotta bg-daya-peach/40 px-2 py-0.5 rounded-full">Active</span>
-                </div>
-                <p className="text-sm text-[#8A5A44] leading-relaxed">
-                  Yesterday involved high auditory sensory load. Aarav typically needs a 24-hour low-demand recovery period after days like this.
+            ) : (
+              <div className="rounded-2xl border border-dashed border-daya-border bg-daya-cream p-6">
+                <p className="font-medium text-daya-text">No personal observations yet.</p>
+                <p className="mt-1 text-sm text-daya-text-secondary">
+                  DAYA only shows observations generated from your own check-ins. There is no sample family data.
                 </p>
+                <Link href="/chat" className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-daya-sage-dark">
+                  Add your first check-in <ChevronRight className="size-4" />
+                </Link>
               </div>
-              <div className="rounded-2xl bg-[#F5F0F8] p-5 border border-[#E2D5ED] hover:border-daya-lavender/40 transition-colors">
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="size-2 rounded-full bg-[#8B75A1]" />
-                  <p className="text-sm font-bold text-[#5A4570]">Communication Breakthrough</p>
-                  <span className="ml-auto text-[10px] font-bold uppercase tracking-wider text-[#8B75A1] bg-daya-lavender/30 px-2 py-0.5 rounded-full">New</span>
-                </div>
-                <p className="text-sm text-[#5A4570] leading-relaxed">
-                  Aarav used 3-word requests unprompted during calm afternoon windows on 4 of the last 7 days.
-                </p>
-              </div>
-            </div>
-            <Link href="/behavioral" className="mt-6 flex items-center justify-center gap-2 text-sm font-semibold text-daya-sage-dark hover:text-daya-sage transition-colors">
-              View all behavioral insights <ArrowRight className="size-4" />
-            </Link>
+            )}
           </motion.section>
 
-          {/* Quick Actions / Schedule */}
-          <motion.section 
-            initial="hidden" animate="visible" variants={fadeUp} custom={7}
-            className="rounded-3xl border border-daya-border bg-white p-8 shadow-sm flex flex-col"
+          <motion.section
+            initial="hidden"
+            animate="visible"
+            variants={fadeUp}
+            custom={7}
+            className="flex flex-col rounded-3xl border border-daya-border bg-white p-8 shadow-sm"
           >
             <div className="mb-6 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-daya-text">Today&apos;s Support Flow</h2>
+              <div>
+                <h2 className="text-xl font-bold text-daya-text">Your plan for today</h2>
+                <p className="mt-1 text-sm text-daya-text-light">
+                  {totalTasks ? `${completedTasks} of ${totalTasks} activities complete` : "Only activities you add are shown"}
+                </p>
+              </div>
               <Calendar className="size-6 text-daya-sage" />
             </div>
-            <div className="space-y-3 flex-1">
-              {[
-                { time: "Morning", task: "Predictable routine with visual schedule", status: "completed", icon: Sun },
-                { time: "Lunch", task: "Safe foods (crunchy texture preferred today)", status: "completed", icon: Clock },
-                { time: "Afternoon", task: "Sensory decompression (weighted blanket)", status: "current", icon: Activity },
-                { time: "Evening", task: "Low-demand wind down sequence (no screens)", status: "upcoming", icon: Moon },
-              ].map((item) => (
-                <div key={item.time} className="flex items-start gap-4 p-3 rounded-2xl hover:bg-daya-cream transition-colors group">
-                  <div className={cn(
-                    "flex size-10 items-center justify-center rounded-xl shrink-0 transition-colors",
-                    item.status === "completed" ? "bg-daya-success/30 text-daya-sage-dark" 
-                      : item.status === "current" ? "bg-daya-gold/30 text-daya-terracotta" 
-                      : "bg-daya-cream text-daya-text-light"
-                  )}>
-                    <item.icon className="size-5" />
+            <div className="flex-1 space-y-4">
+              {sections.map((section) => {
+                const period = periods.find((item) => item.id === section.period);
+                if (!period) return null;
+                const Icon = period.icon;
+                return (
+                  <div key={section.period}>
+                    <div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-daya-text-light">
+                      <Icon className="size-4" />
+                      {period.label}
+                    </div>
+                    {section.items.length ? (
+                      <div className="space-y-2">
+                        {section.items.map((task) => (
+                          <label
+                            key={task.id}
+                            className="flex cursor-pointer items-start gap-3 rounded-2xl bg-daya-cream p-3 transition-colors hover:bg-[#F2EDE4]"
+                          >
+                            <input
+                              type="checkbox"
+                              aria-label={`Mark ${task.title} complete`}
+                              checked={task.completed}
+                              disabled={savingTaskId !== null}
+                              onChange={() => void toggleTask(section.period, task)}
+                              className="mt-1 size-4 accent-daya-sage-dark"
+                            />
+                            <span className="min-w-0 flex-1">
+                              <span className={`block text-sm font-medium text-daya-text ${task.completed ? "line-through opacity-60" : ""}`}>
+                                {task.title}
+                              </span>
+                              {task.time && <span className="text-xs text-daya-text-light">{task.time}</span>}
+                              {task.description && (
+                                <span className="mt-1 block whitespace-pre-wrap text-xs text-daya-text-secondary">
+                                  {task.description}
+                                </span>
+                              )}
+                            </span>
+                            {task.completed && <Check className="mt-0.5 size-4 text-daya-sage-dark" />}
+                          </label>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="rounded-xl border border-dashed border-daya-border px-3 py-2 text-sm text-daya-text-light">
+                        Nothing planned
+                      </p>
+                    )}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold uppercase tracking-wider text-daya-text-light mb-0.5">{item.time}</p>
-                    <p className="text-sm font-medium text-daya-text leading-snug">{item.task}</p>
-                  </div>
-                  <div className={cn(
-                    "size-2.5 rounded-full mt-2 shrink-0",
-                    item.status === "completed" ? "bg-daya-success" : item.status === "current" ? "bg-daya-gold animate-pulse" : "bg-daya-border"
-                  )} />
-                </div>
-              ))}
+                );
+              })}
             </div>
-            <Link href="/planner" className="mt-6 w-full text-center block">
-              <div className="w-full bg-daya-cream text-daya-text-secondary hover:text-daya-text hover:bg-[#F2EDE4] rounded-2xl py-3 font-medium transition-colors text-sm border border-transparent hover:border-daya-border flex items-center justify-center gap-2">
-                Open Full Daily Planner <ChevronRight className="size-4" />
-              </div>
+            {!totalTasks && (
+              <p className="mt-4 text-sm text-daya-text-secondary">
+                Your daily schedule is empty until you add activities in the planner.
+              </p>
+            )}
+            <Link href="/planner" className="mt-6 block w-full">
+              <span className="flex w-full items-center justify-center gap-2 rounded-2xl border border-transparent bg-daya-cream py-3 text-sm font-medium text-daya-text-secondary transition-colors hover:border-daya-border hover:bg-[#F2EDE4] hover:text-daya-text">
+                Open Daily Planner <ChevronRight className="size-4" />
+              </span>
             </Link>
           </motion.section>
         </div>
 
-        {/* Weekly Trend + Quick Actions */}
         <div className="grid gap-6 lg:grid-cols-3">
-          {/* Weekly Trend */}
-          <motion.section 
-            initial="hidden" animate="visible" variants={fadeUp} custom={8}
+          <motion.section
+            initial="hidden"
+            animate="visible"
+            variants={fadeUp}
+            custom={8}
             className="rounded-3xl border border-daya-border bg-white p-8 shadow-sm lg:col-span-2"
           >
             <div className="mb-6 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-daya-text">7-Day Stability Trend</h2>
+              <div>
+                <h2 className="text-xl font-bold text-daya-text">Your 7-day mood check-ins</h2>
+                <p className="mt-1 text-sm text-daya-text-light">Only days you logged are plotted.</p>
+              </div>
               <BarChart3 className="size-6 text-daya-sage" />
             </div>
-            <div className="flex items-end gap-2 h-48 mt-2">
-              {[
-                { day: "Mon", value: 55, mood: "Hard" },
-                { day: "Tue", value: 45, mood: "Difficult" },
-                { day: "Wed", value: 60, mood: "Okay" },
-                { day: "Thu", value: 70, mood: "Good" },
-                { day: "Fri", value: 65, mood: "Okay" },
-                { day: "Sat", value: 80, mood: "Great" },
-                { day: "Sun", value: 72, mood: "Good" },
-              ].map((bar, i) => (
-                <div key={bar.day} className="flex-1 flex flex-col justify-end items-center gap-2 h-full">
-                  <div className="w-full flex-1 flex flex-col justify-end">
-                    <motion.div 
-                      initial={{ height: 0 }}
-                      animate={{ height: `${bar.value}%` }}
-                      transition={{ delay: 0.8 + i * 0.08, duration: 0.5, ease: "easeOut" }}
-                      className={cn(
-                        "w-full rounded-xl transition-colors relative overflow-hidden",
-                        bar.value >= 70 ? "bg-daya-sage/60" : bar.value >= 50 ? "bg-daya-gold/60" : "bg-daya-terracotta/40"
-                      )}
-                    >
-                      <div className="absolute inset-0 bg-gradient-to-t from-white/20 to-transparent" />
-                    </motion.div>
+            <div className="mt-2 flex h-48 items-end gap-2">
+              {lastSevenDates.map((date, index) => {
+                const checkIn = checkInsByDate.get(date);
+                const value = checkIn ? moodValue(checkIn.mood) : 0;
+                const dayLabel = new Date(`${date}T00:00:00`).toLocaleDateString("en-IN", { weekday: "short" });
+                return (
+                  <div key={date} className="flex h-full flex-1 flex-col items-center justify-end gap-2">
+                    <div className="flex w-full flex-1 flex-col justify-end">
+                      <motion.div
+                        initial={{ height: 0 }}
+                        animate={{ height: checkIn ? `${value * 20}%` : "4%" }}
+                        transition={{ delay: 0.25 + index * 0.05, duration: 0.35, ease: "easeOut" }}
+                        title={checkIn ? `${dayLabel}: ${moodLabel(checkIn.mood)}` : `${dayLabel}: no check-in`}
+                        className={cn(
+                          "relative w-full overflow-hidden rounded-xl",
+                          !checkIn ? "bg-daya-border/60" : value >= 4 ? "bg-daya-sage/70" : value === 3 ? "bg-daya-gold/70" : "bg-daya-terracotta/50"
+                        )}
+                      />
+                    </div>
+                    <span className="text-[10px] font-bold uppercase text-daya-text-light">{dayLabel}</span>
                   </div>
-                  <span className="text-[10px] font-bold text-daya-text-light uppercase">{bar.day}</span>
-                </div>
-              ))}
+                );
+              })}
             </div>
             <div className="mt-4 flex items-center justify-between text-xs text-daya-text-light">
-              <span>Lower stability</span>
-              <div className="flex gap-3">
-                <span className="flex items-center gap-1"><span className="size-2 rounded-full bg-daya-terracotta/40" /> Hard</span>
-                <span className="flex items-center gap-1"><span className="size-2 rounded-full bg-daya-gold/60" /> Okay</span>
-                <span className="flex items-center gap-1"><span className="size-2 rounded-full bg-daya-sage/60" /> Good</span>
-              </div>
-              <span>Higher stability</span>
+              <span>Very difficult</span>
+              <span>No bar means no check-in was logged</span>
+              <span>Great</span>
             </div>
           </motion.section>
 
-          {/* Quick Actions */}
-          <motion.section 
-            initial="hidden" animate="visible" variants={fadeUp} custom={9}
+          <motion.section
+            initial="hidden"
+            animate="visible"
+            variants={fadeUp}
+            custom={9}
             className="rounded-3xl border border-daya-border bg-white p-6 shadow-sm"
           >
-            <h2 className="text-lg font-bold text-daya-text mb-4">Quick Actions</h2>
+            <h2 className="mb-4 text-lg font-bold text-daya-text">Quick Actions</h2>
             <div className="space-y-2">
               {[
-                { label: "Log Today's Check-in", href: "/checkin", icon: ClipboardList, color: "text-daya-sage-dark bg-daya-sage-light" },
                 { label: "Talk to DAYA", href: "/chat", icon: MessageCircle, color: "text-[#8B75A1] bg-daya-lavender/30" },
-                { label: "Start Home Therapy", href: "/home-therapies", icon: Activity, color: "text-daya-terracotta bg-daya-peach/30" },
-                { label: "View Doctor Report", href: "/reports", icon: Zap, color: "text-daya-sky bg-daya-sky/20" },
-                { label: "Find Therapist", href: "/therapists", icon: HeartPulse, color: "text-daya-gold bg-daya-gold/20" },
+                { label: "View your reports", href: "/reports", icon: TrendingUp, color: "text-daya-sky bg-daya-sky/20" },
+                { label: "Child profile", href: "/profile", icon: Brain, color: "text-daya-sage-dark bg-daya-sage-light" },
+                { label: "Medical records", href: "/medical-records", icon: HeartPulse, color: "text-daya-terracotta bg-daya-terracotta/20" },
               ].map((action) => (
-                <Link 
+                <Link
                   key={action.label}
                   href={action.href}
-                  className="flex items-center gap-3 rounded-2xl p-3 hover:bg-daya-cream transition-all group"
+                  className="group flex items-center gap-3 rounded-2xl p-3 transition-all hover:bg-daya-cream"
                 >
                   <div className={cn("flex size-10 items-center justify-center rounded-xl", action.color)}>
                     <action.icon className="size-5" />
                   </div>
-                  <span className="text-sm font-medium text-daya-text group-hover:text-daya-sage-dark transition-colors">{action.label}</span>
-                  <ChevronRight className="size-4 ml-auto text-daya-text-light group-hover:text-daya-sage-dark transition-colors" />
+                  <span className="text-sm font-medium text-daya-text transition-colors group-hover:text-daya-sage-dark">{action.label}</span>
+                  <ChevronRight className="ml-auto size-4 text-daya-text-light transition-colors group-hover:text-daya-sage-dark" />
                 </Link>
               ))}
             </div>
           </motion.section>
         </div>
 
-        {/* Recent Activity */}
-        <motion.section 
-          initial="hidden" animate="visible" variants={fadeUp} custom={10}
+        <motion.section
+          initial="hidden"
+          animate="visible"
+          variants={fadeUp}
+          custom={10}
           className="rounded-3xl border border-daya-border bg-white p-8 shadow-sm"
         >
           <div className="mb-6 flex items-center justify-between">
-            <h2 className="text-xl font-bold text-daya-text">Recent Activity</h2>
+            <div>
+              <h2 className="text-xl font-bold text-daya-text">Your recent activity</h2>
+              <p className="mt-1 text-sm text-daya-text-light">Check-ins and observations saved for your family.</p>
+            </div>
             <Clock className="size-6 text-daya-sage" />
           </div>
-          <div className="space-y-0">
-            {[
-              { time: "2 hours ago", event: "Daily check-in completed", detail: "Sleep 7h, Mood: Okay, Meltdowns: 0", icon: ClipboardList, color: "text-daya-sage-dark" },
-              { time: "4 hours ago", event: "DAYA noticed a pattern", detail: "Routine consistency improving on school mornings", icon: Brain, color: "text-[#8B75A1]" },
-              { time: "Yesterday", event: "Home therapy completed", detail: "Balloon Belly Breathing — 5 minutes", icon: Activity, color: "text-daya-terracotta" },
-              { time: "Yesterday", event: "Chat conversation", detail: "Discussed meltdown recovery strategies", icon: MessageCircle, color: "text-daya-sky" },
-              { time: "2 days ago", event: "Doctor report generated", detail: "14-day behavioral summary for Dr. Priya Sharma", icon: Zap, color: "text-daya-gold" },
-            ].map((item, i) => (
-              <div key={i} className="flex items-start gap-4 py-4 border-b border-daya-border/50 last:border-0">
-                <div className={cn("flex size-10 items-center justify-center rounded-xl bg-daya-cream shrink-0", item.color)}>
-                  <item.icon className="size-5" />
+          {activity.length ? (
+            <div>
+              {activity.map((item) => (
+                <div key={item.id} className="flex items-start gap-4 border-b border-daya-border/50 py-4 last:border-0">
+                  <div className={cn("flex size-10 shrink-0 items-center justify-center rounded-xl bg-daya-cream", item.color)}>
+                    <item.icon className="size-5" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-daya-text">{item.title}</p>
+                    <p className="mt-0.5 line-clamp-2 text-xs text-daya-text-secondary">{item.detail}</p>
+                  </div>
+                  <span className="shrink-0 pt-0.5 text-xs text-daya-text-light">{readableDate(item.date)}</span>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-daya-text">{item.event}</p>
-                  <p className="text-xs text-daya-text-secondary mt-0.5">{item.detail}</p>
-                </div>
-                <span className="text-xs text-daya-text-light shrink-0 pt-0.5">{item.time}</span>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-daya-border bg-daya-cream p-6">
+              <p className="font-medium text-daya-text">No activity recorded yet.</p>
+              <p className="mt-1 text-sm text-daya-text-secondary">
+                When you add check-ins or DAYA finds patterns in your own history, they will appear here.
+              </p>
+            </div>
+          )}
         </motion.section>
-
       </div>
     </div>
   );

@@ -11,7 +11,7 @@ interface WelcomeScreenProps {
 const suggestions = [
   {
     icon: Sun,
-    text: "How was Aarav's week overall?",
+    text: "How was our week overall?",
     label: "Weekly overview",
   },
   {

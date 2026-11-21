@@ -21,7 +21,7 @@ export function ChatView() {
   return (
     <div className="flex flex-col h-full">
       {showWelcome ? (
-        <WelcomeScreen childName="Aarav" onSuggestionClick={sendMessage} />
+        <WelcomeScreen childName="your child" onSuggestionClick={sendMessage} />
       ) : (
         <ScrollArea className="flex-1">
           <div className="max-w-2xl mx-auto py-6 space-y-4">

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useAuth } from "@/components/auth-provider";
 import { motion } from "framer-motion";
 import { 
   Bell, 
@@ -25,6 +26,9 @@ function cn(...inputs: (string | undefined | null | false)[]) {
 }
 
 export default function SettingsPage() {
+  const { user } = useAuth();
+  const displayName = user?.user_metadata?.display_name as string | undefined;
+  const email = user?.email ?? "";
   const [notifications, setNotifications] = useState({
     checkInReminder: true,
     insightAlerts: true,
@@ -81,9 +85,9 @@ export default function SettingsPage() {
           </h2>
           <div className="space-y-4">
             {[
-              { label: "Name", value: "Ananya Reddy", icon: User },
-              { label: "Email", value: "ananya.reddy@email.com", icon: Mail },
-              { label: "Phone", value: "+91 98765 43210", icon: Smartphone },
+              { label: "Name", value: displayName || "Not set", icon: User },
+              { label: "Email", value: email || "Not set", icon: Mail },
+              { label: "Phone", value: "Not set", icon: Smartphone },
               { label: "Password", value: "••••••••", icon: Lock },
             ].map((field) => (
               <div key={field.label} className="flex items-center justify-between p-3 rounded-2xl hover:bg-[#FAF7F2] transition-colors group">
@@ -113,7 +117,7 @@ export default function SettingsPage() {
           </h2>
           <div className="space-y-4">
             {[
-              { key: "checkInReminder" as const, label: "Daily Check-in Reminder", desc: "Get reminded to log Aarav's day at 7:00 PM" },
+              { key: "checkInReminder" as const, label: "Daily Check-in Reminder", desc: "Get reminded to log your child's day at 7:00 PM" },
               { key: "insightAlerts" as const, label: "New Insight Alerts", desc: "Be notified when DAYA detects a new behavioral pattern" },
               { key: "weeklyReport" as const, label: "Weekly Summary Report", desc: "Receive a weekly email with behavioral trends" },
               { key: "communityUpdates" as const, label: "Community Updates", desc: "New posts and replies in your parent groups" },

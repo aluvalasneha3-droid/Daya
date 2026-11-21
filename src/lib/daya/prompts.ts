@@ -221,11 +221,7 @@ ${formatSupport(supportSnippets)}
 ${dailyPlan ? `\nPRE-GENERATED DAILY PLAN (personalise this to ${childName}'s specific patterns):\n${dailyPlan}` : ""}
 ${foodPlan ? `\nPRE-GENERATED FOOD PLAN (adapt to ${childName}'s known preferences and sensory profile):\n${foodPlan}` : ""}
 
-UPLOADED MEDICAL REPORTS:
-The parent has securely uploaded the following reports for your context. You MUST NOT diagnose or offer medical treatment based on these. Use them only to better understand ${childName}'s profile and offer more targeted emotional and routine support:
-- Developmental_Assessment_Jan2026.pdf: Mentions early signs of auditory processing delays and recommends visual schedules.
-- Speech_Therapy_Summary_Nov.pdf: Highlights progress in using PECS and suggests avoiding pressure during communication blocks.
-- Sensory_Profile_Questionnaire.png: Indicates high sensitivity to tags in clothing and bright lights, but deep pressure seeking.
+${child?.report_summary ? `PARENT-PROVIDED SUMMARY OF PREVIOUS REPORTS:\n${child.report_summary}\nTreat this only as family-provided context. Do not diagnose or recommend medical treatment from it.` : ""}
 
 ${safetyInstruction(safety)}`.trim();
 }
@@ -241,10 +237,22 @@ function formatChild(child?: ChildProfile) {
   return `CHILD PROFILE:
 - Name: ${child.name}
 ${child.age ? `- Age: ${child.age}` : ""}
+${child.date_of_birth ? `- Date of birth: ${child.date_of_birth}` : ""}
+${child.gender ? `- Gender: ${child.gender}` : ""}
+${child.diagnosis ? `- Parent-provided diagnosis/support area: ${child.diagnosis}` : ""}
+${child.diagnosis_date ? `- Diagnosis date: ${child.diagnosis_date}` : ""}
+${child.diagnosed_by ? `- Diagnosed by: ${child.diagnosed_by}` : ""}
+${child.medical_conditions ? `- Parent-provided medical/developmental notes: ${child.medical_conditions}` : ""}
+${child.allergies ? `- Allergies/health alerts: ${child.allergies}` : ""}
+${child.medications ? `- Medication notes: ${child.medications}` : ""}
 ${child.sensitivities.length ? `- Sensitivities: ${child.sensitivities.join(", ")}` : ""}
 ${child.triggers.length ? `- Known triggers: ${child.triggers.join(", ")}` : ""}
 ${child.routines.length ? `- Routines: ${child.routines.join(", ")}` : ""}
+${child.calming_strategies ? `- Helpful calming strategies: ${child.calming_strategies}` : ""}
 ${child.communication_style ? `- Communication style: ${child.communication_style}` : ""}
+${child.strengths_interests ? `- Strengths, interests, and preferences: ${child.strengths_interests}` : ""}
+${child.care_team ? `- Care team notes: ${child.care_team}` : ""}
+${child.report_summary ? `- Parent-provided previous report summary: ${child.report_summary}` : ""}
 ${child.notes ? `- Notes: ${child.notes}` : ""}`;
 }
 

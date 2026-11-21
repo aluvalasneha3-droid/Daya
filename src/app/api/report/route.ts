@@ -1,12 +1,17 @@
-import { DEMO_USER_ID, loadDayaContext } from "@/lib/daya/repository";
+import { loadDayaContext } from "@/lib/daya/repository";
 import { generateTherapistReport, formatReportAsText } from "@/lib/daya/report";
+import { getAuthenticatedUser } from "@/lib/auth-server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
+  const authenticatedUser = await getAuthenticatedUser(request);
+  if (!authenticatedUser) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
   const url = new URL(request.url);
-  const userId = url.searchParams.get("userId") ?? DEMO_USER_ID;
+  const userId = authenticatedUser.id;
   const childId = url.searchParams.get("childId") ?? undefined;
   const format = url.searchParams.get("format") ?? "json";
 

@@ -8,12 +8,11 @@ import type {
   Message,
   SupportSnippet,
 } from "@/types";
-import { MOCK_CHECKINS, MOCK_CHILD, MOCK_MEMORIES } from "@/lib/mock-data";
 import { analyzeBehaviorPatterns } from "@/lib/daya/insights";
 import { getSupabaseAdmin } from "@/lib/daya/supabase";
 
-export const DEMO_USER_ID = "demo-parent";
-export const DEMO_CHILD_ID = MOCK_CHILD.id;
+export const DEMO_USER_ID = "";
+export const DEMO_CHILD_ID = "";
 
 type LoadContextInput = {
   userId?: string;
@@ -35,11 +34,12 @@ export async function loadDayaContext({
   conversationId,
 }: LoadContextInput): Promise<DayaContext> {
   const supabase = getSupabaseAdmin();
-  if (!supabase) return getDemoContext(conversationId);
+  if (!userId) return getEmptyContext(conversationId);
+  if (!supabase) throw new Error("Supabase is not configured");
 
   try {
     const child = await fetchChildProfile(userId, childId);
-    if (!child) return getDemoContext(conversationId);
+    if (!child) return getEmptyContext(conversationId);
 
     const [recentCheckIns, memories, storedInsights, conversation, messages] =
       await Promise.all([
@@ -64,8 +64,8 @@ export async function loadDayaContext({
       persistence: "supabase",
     };
   } catch (error) {
-    console.error("Falling back to demo context", error);
-    return getDemoContext(conversationId);
+    console.error("Failed to load account context", error);
+    throw error;
   }
 }
 
@@ -161,7 +161,7 @@ export async function saveDailyCheckIn(
   };
 
   const supabase = getSupabaseAdmin();
-  if (!supabase) return normalized;
+  if (!supabase) throw new Error("Supabase is not configured");
 
   const { data, error } = await supabase
     .from("daily_checkins")
@@ -198,7 +198,7 @@ export async function saveDailyCheckIn(
 
   if (error) {
     console.error("Failed to save check-in", error);
-    return normalized;
+    throw error;
   }
 
   return data as DailyCheckIn;
@@ -261,18 +261,16 @@ export async function fetchSeededSupportSnippets(): Promise<SupportSnippet[]> {
   return data as SupportSnippet[];
 }
 
-function getDemoContext(conversationId?: string): DayaContext {
-  const insights = analyzeBehaviorPatterns(MOCK_CHECKINS, MOCK_CHILD.id);
-
+function getEmptyContext(conversationId?: string): DayaContext {
   return {
-    child: MOCK_CHILD,
-    recentCheckIns: MOCK_CHECKINS,
-    insights,
-    memories: MOCK_MEMORIES,
+    child: undefined,
+    recentCheckIns: [],
+    insights: [],
+    memories: [],
     supportSnippets: [],
-    conversation: demoConversation(conversationId),
+    conversation: conversationId ? demoConversation(conversationId) : undefined,
     messages: [],
-    persistence: "demo",
+    persistence: "supabase",
   };
 }
 

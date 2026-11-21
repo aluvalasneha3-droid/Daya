@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { AuthProvider } from "@/components/auth-provider";
 
 export const metadata: Metadata = {
   title: "DAYA — Behavioral Support Companion",
@@ -29,7 +30,7 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-full flex flex-col font-sans text-daya-text">
-        {children}
+        <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
   );

@@ -55,7 +55,7 @@ export default function LandingPage() {
             <Link href="/login" className="rounded-full px-5 py-2.5 text-sm font-medium text-daya-text-secondary hover:text-daya-text transition">
               Log in
             </Link>
-            <Link href="/login" className="rounded-full bg-daya-sage px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-daya-sage-dark transition">
+            <Link href="/login?mode=signup" className="rounded-full bg-daya-sage px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-daya-sage-dark transition">
               Get Started
             </Link>
           </div>
@@ -71,7 +71,7 @@ export default function LandingPage() {
               <a href="#features" className="py-2 text-sm font-medium" onClick={() => setMobileMenuOpen(false)}>Features</a>
               <a href="#how" className="py-2 text-sm font-medium" onClick={() => setMobileMenuOpen(false)}>How It Works</a>
               <a href="#testimonials" className="py-2 text-sm font-medium" onClick={() => setMobileMenuOpen(false)}>Stories</a>
-              <Link href="/login" className="mt-2 rounded-full bg-daya-sage px-6 py-3 text-center text-sm font-semibold text-white">
+              <Link href="/login?mode=signup" className="mt-2 rounded-full bg-daya-sage px-6 py-3 text-center text-sm font-semibold text-white">
                 Get Started
               </Link>
             </div>
@@ -119,7 +119,7 @@ export default function LandingPage() {
               className="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:justify-center"
             >
               <Link
-                href="/login"
+                href="/login?mode=signup"
                 className="group flex items-center gap-2 rounded-full bg-daya-sage px-8 py-3.5 text-base font-semibold text-white shadow-lg shadow-daya-sage/20 transition hover:bg-daya-sage-dark hover:shadow-xl"
               >
                 Start Your Journey
@@ -320,7 +320,7 @@ export default function LandingPage() {
                 ))}
               </ul>
               <Link
-                href="/login"
+                href="/login?mode=signup"
                 className="mt-8 block w-full rounded-2xl border border-daya-sage/30 bg-white py-3 text-center text-sm font-semibold text-daya-sage-dark transition hover:bg-daya-sage-light"
               >
                 Start Free
@@ -369,7 +369,7 @@ export default function LandingPage() {
                 ))}
               </ul>
               <Link
-                href="/login"
+                href="/login?mode=signup"
                 className="mt-8 block w-full rounded-2xl bg-daya-sage py-3 text-center text-sm font-semibold text-white shadow-lg shadow-daya-sage/20 transition hover:bg-daya-sage-dark"
               >
                 Start 14-Day Free Trial
@@ -412,7 +412,7 @@ export default function LandingPage() {
                 ))}
               </ul>
               <Link
-                href="/login"
+                href="/login?mode=signup"
                 className="mt-8 block w-full rounded-2xl border border-daya-sage/30 bg-white py-3 text-center text-sm font-semibold text-daya-sage-dark transition hover:bg-daya-sage-light"
               >
                 Contact Sales
@@ -438,7 +438,7 @@ export default function LandingPage() {
             </p>
             <div className="mt-10">
               <Link
-                href="/login"
+                href="/login?mode=signup"
                 className="inline-flex items-center gap-2 rounded-full bg-white px-8 py-3.5 text-base font-semibold text-daya-sage-dark shadow-lg transition hover:bg-daya-offwhite hover:shadow-xl"
               >
                 Start Free Today

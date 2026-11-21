@@ -27,7 +27,7 @@ export function AppHeader({ activeTab, onTabChange }: AppHeaderProps) {
               DAYA
             </h1>
           </div>
-          <span className="text-xs text-stone-400">for Aarav</span>
+          <span className="text-xs text-stone-400">private account</span>
         </div>
 
         <nav className="flex gap-1 -mb-px">

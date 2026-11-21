@@ -27,7 +27,7 @@ interface DailyCheckInProps {
 }
 
 const STEPS = [
-  { key: "sleep", label: "Sleep", icon: Moon, question: "How did Aarav sleep last night?" },
+  { key: "sleep", label: "Sleep", icon: Moon, question: "How did your child sleep last night?" },
   { key: "meals", label: "Meals", icon: Utensils, question: "How were meals today?" },
   { key: "mood", label: "Mood", icon: Smile, question: "What was the overall mood today?" },
   { key: "meltdowns", label: "Meltdowns", icon: AlertTriangle, question: "Any meltdowns or difficult moments?" },

@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef } from "react";
 import type { Message } from "@/types";
 import type { SupportedLanguage } from "@/lib/daya/i18n";
+import { getAccessToken } from "@/lib/auth-client";
 
 export function useChat(language: SupportedLanguage = "en") {
 
@@ -33,6 +34,7 @@ export function useChat(language: SupportedLanguage = "en") {
 
     try {
       abortRef.current = new AbortController();
+      const accessToken = await getAccessToken();
 
       const allMessages = [...messages, userMessage]
         .filter((m) => m.role === "user" || m.role === "assistant")
@@ -43,7 +45,10 @@ export function useChat(language: SupportedLanguage = "en") {
 
       const response = await fetch("/api/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
         body: JSON.stringify({ conversationId, messages: allMessages, language }),
         signal: abortRef.current.signal,
       });
