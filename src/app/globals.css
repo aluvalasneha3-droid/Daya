@@ -1,0 +1,153 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: "Inter", "Plus Jakarta Sans", "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono", "Geist Mono Fallback", ui-monospace, monospace;
+  --font-heading: "Plus Jakarta Sans", "Inter", "Geist", ui-sans-serif, system-ui, sans-serif;
+
+  /* DAYA brand colors */
+  --color-daya-sage: #A8C3A0;
+  --color-daya-sage-light: #EEF4EC;
+  --color-daya-sage-dark: #7A9E70;
+  --color-daya-lavender: #C8B6D8;
+  --color-daya-sky: #B8D7EA;
+  --color-daya-peach: #F4C7B8;
+  --color-daya-terracotta: #D99873;
+  --color-daya-gold: #E7C98B;
+  --color-daya-cream: #FAF7F2;
+  --color-daya-offwhite: #FDFCF9;
+  --color-daya-card: #F8F5F0;
+  --color-daya-success: #B7D7B0;
+  --color-daya-warning: #EACB8D;
+  --color-daya-error: #D9A5A5;
+  --color-daya-text: #2F3A36;
+  --color-daya-text-secondary: #5F6B66;
+  --color-daya-text-light: #8C9691;
+
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  --background: #FAF7F2;
+  --foreground: #2F3A36;
+  --card: #FFFFFF;
+  --card-foreground: #2F3A36;
+  --popover: #FFFFFF;
+  --popover-foreground: #2F3A36;
+  --primary: #A8C3A0;
+  --primary-foreground: #2F3A36;
+  --secondary: #F8F5F0;
+  --secondary-foreground: #2F3A36;
+  --muted: #F8F5F0;
+  --muted-foreground: #5F6B66;
+  --accent: #EEF4EC;
+  --accent-foreground: #2F3A36;
+  --destructive: #D9A5A5;
+  --border: #E8E3DC;
+  --input: #E8E3DC;
+  --ring: #A8C3A0;
+  --chart-1: #A8C3A0;
+  --chart-2: #C8B6D8;
+  --chart-3: #B8D7EA;
+  --chart-4: #F4C7B8;
+  --chart-5: #E7C98B;
+  --radius: 0.75rem;
+  --sidebar: #FDFCF9;
+  --sidebar-foreground: #2F3A36;
+  --sidebar-primary: #A8C3A0;
+  --sidebar-primary-foreground: #2F3A36;
+  --sidebar-accent: #EEF4EC;
+  --sidebar-accent-foreground: #2F3A36;
+  --sidebar-border: #E8E3DC;
+  --sidebar-ring: #A8C3A0;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+
+/* Custom scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #d4cfc8;
+  border-radius: 999px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #b8b2a9;
+}
+
+/* Border color token */
+.border-daya-border {
+  border-color: #E8E3DC;
+}
+
+/* Smooth page transitions */
+main {
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
